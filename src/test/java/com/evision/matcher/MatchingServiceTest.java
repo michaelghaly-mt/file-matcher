@@ -21,10 +21,15 @@ class MatchingServiceTest {
     Path tmp;
 
     private MatchingService service(Path fileA, Path pool) {
+        return service(fileA, pool, List.of("txt"));
+    }
+
+    private MatchingService service(Path fileA, Path pool, List<String> extensions) {
         MatchingService matchingService = new MatchingService(new WordTokenizer(), new SimilarityCalculator());
         ReflectionTestUtils.setField(matchingService, "mainFile", fileA.toString());
         ReflectionTestUtils.setField(matchingService, "filesDirectory", pool.toString());
         ReflectionTestUtils.setField(matchingService, "initialThreads", 2);
+        ReflectionTestUtils.setField(matchingService, "fileExtensions", extensions);
         return matchingService;
     }
 
@@ -35,6 +40,7 @@ class MatchingServiceTest {
         Files.writeString(pool.resolve("perfect.txt"), "The lazy dog jumps over the quick brown fox");
         Files.writeString(pool.resolve("partial.txt"), "the quick brown cat");
         Files.writeString(pool.resolve("none.txt"), "hello world");
+        Files.writeString(pool.resolve("ignored.pdf"), "should be ignored");
 
         List<MatchResult> results = service(a, pool).matchAll();
 
@@ -45,8 +51,23 @@ class MatchingServiceTest {
     }
 
     @Test
+    void includesConfiguredExtensionsOnly() throws Exception {
+        Path a = Files.writeString(tmp.resolve("A.md"), "hello world");
+        Path pool = Files.createDirectory(tmp.resolve("pool"));
+        Files.writeString(pool.resolve("match.md"), "hello world");
+        Files.writeString(pool.resolve("skip.txt"), "hello world");
+
+        List<MatchResult> results = service(a, pool, List.of("md")).matchAll();
+
+        assertThat(results).extracting(MatchResult::fileName)
+                .containsExactly("match.md");
+    }
+
+    @Test
     void failsClearlyWhenFileAIsMissing() throws Exception {
         Path pool = Files.createDirectory(tmp.resolve("pool"));
+        Files.writeString(pool.resolve("any.txt"), "x");
+
         assertThatThrownBy(() -> service(tmp.resolve("missing.txt"), pool).matchAll())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("File A not found");
@@ -56,6 +77,18 @@ class MatchingServiceTest {
     void failsClearlyWhenPoolIsEmpty() throws Exception {
         Path a = Files.writeString(tmp.resolve("A.txt"), "hello");
         Path pool = Files.createDirectory(tmp.resolve("pool"));
+
+        assertThatThrownBy(() -> service(a, pool).matchAll())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("no files");
+    }
+
+    @Test
+    void failsWhenPoolHasOnlyNonMatchingExtensions() throws Exception {
+        Path a = Files.writeString(tmp.resolve("A.txt"), "hello");
+        Path pool = Files.createDirectory(tmp.resolve("pool"));
+        Files.writeString(pool.resolve("notes.pdf"), "hello");
+
         assertThatThrownBy(() -> service(a, pool).matchAll())
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no files");

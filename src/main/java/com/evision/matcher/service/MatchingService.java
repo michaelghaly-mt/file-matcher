@@ -29,6 +29,8 @@ public class MatchingService {
     private String filesDirectory;
     @Value("${matcher.threads:0}")
     private int initialThreads;
+    @Value("${matcher.fileExtensions:txt}")
+    private List<String> fileExtensions;
 
 
     private final WordTokenizer tokenizer;
@@ -43,7 +45,7 @@ public class MatchingService {
         Path fileA = Path.of(mainFile);
         Path poolDir = Path.of(filesDirectory);
 
-        if (!Files.isRegularFile(fileA) && isTxtFile(fileA)) {
+        if (!Files.isRegularFile(fileA) && isTextFile(fileA)) {
             throw new IllegalArgumentException("File A not found: " + fileA.toAbsolutePath());
         }
         if (!Files.isDirectory(poolDir)) {
@@ -55,7 +57,7 @@ public class MatchingService {
 
         List<Path> poolFiles;
         try (Stream<Path> stream = Files.list(poolDir)) {
-            poolFiles = stream.filter(Files::isRegularFile).filter(this::isTxtFile).sorted().toList();
+            poolFiles = stream.filter(Files::isRegularFile).filter(this::isTextFile).sorted().toList();
         }
         if (poolFiles.isEmpty()) {
             throw new IllegalArgumentException("Pool directory has no files: " + poolDir.toAbsolutePath());
@@ -91,9 +93,9 @@ public class MatchingService {
         return initialThreads > 0 ? initialThreads : Runtime.getRuntime().availableProcessors();
     }
 
-    private boolean isTxtFile(Path path) {
-        String name = path.getFileName().toString();
-        return name.toLowerCase().endsWith(".txt");
+    private boolean isTextFile(Path path) {
+        String name = path.getFileName().toString().toLowerCase();
+        return fileExtensions.stream().anyMatch(ext -> name.endsWith("." + ext.toLowerCase()));
     }
 
 }
