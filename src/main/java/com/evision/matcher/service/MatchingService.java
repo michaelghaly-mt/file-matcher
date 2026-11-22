@@ -19,7 +19,6 @@ import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
 @Slf4j
-@Validated
 @Service
 public class MatchingService {
 
@@ -45,26 +44,65 @@ public class MatchingService {
         Path fileA = Path.of(mainFile);
         Path poolDir = Path.of(filesDirectory);
 
-        if (!Files.isRegularFile(fileA) && isTextFile(fileA)) {
-            throw new IllegalArgumentException("File A not found: " + fileA.toAbsolutePath());
-        }
-        if (!Files.isDirectory(poolDir)) {
-            throw new IllegalArgumentException("Pool directory not found: " + poolDir.toAbsolutePath());
-        }
+        filesValidations(fileA, poolDir);
 
         Set<String> wordsOfA = tokenizer.extractWords(fileA);
         log.info("File A: {} distinct words", wordsOfA.size());
 
-        List<Path> poolFiles;
-        try (Stream<Path> stream = Files.list(poolDir)) {
-            poolFiles = stream.filter(Files::isRegularFile).filter(this::isTextFile).sorted().toList();
-        }
+        List<Path> poolFiles = filterDirectoryFiles(poolDir);
+
         if (poolFiles.isEmpty()) {
-            throw new IllegalArgumentException("Pool directory has no files: " + poolDir.toAbsolutePath());
+            throw new IllegalArgumentException(
+                    "Pool directory has no files with extensions " + fileExtensions + ": " + poolDir.toAbsolutePath());
         }
 
         int threads = Math.min(effectiveThreads(), poolFiles.size());
         ExecutorService executor = Executors.newFixedThreadPool(threads);
+
+        return asyncMatch(wordsOfA, executor, poolFiles);
+    }
+
+    private MatchResult scoreFile(Path file, Set<String> wordsOfA) {
+        try {
+            Set<String> words = tokenizer.extractWords(file);
+            double score = calculator.score(wordsOfA, words);
+            return new MatchResult(file.getFileName().toString(), score);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not read " + file, e);
+        }
+    }
+
+    private int effectiveThreads() {
+        return initialThreads > 0 ? initialThreads : Runtime.getRuntime().availableProcessors();
+    }
+
+    private boolean isTextFile(Path path) {
+        String name = path.getFileName().toString().toLowerCase();
+        return fileExtensions.stream().anyMatch(ext -> name.endsWith("." + ext.toLowerCase()));
+    }
+
+    private void filesValidations(Path fileA, Path poolDir) {
+        if (!Files.isRegularFile(fileA)) {
+            throw new IllegalArgumentException("File A not found: " + fileA.toAbsolutePath());
+        }
+        if (!isTextFile(fileA)) {
+            throw new IllegalArgumentException("File A has an unsupported extension: " + fileA.getFileName());
+        }
+        if (!Files.isDirectory(poolDir)) {
+            throw new IllegalArgumentException("Pool directory not found: " + poolDir.toAbsolutePath());
+        }
+    }
+
+    private List<Path> filterDirectoryFiles(Path poolDir) {
+        try (Stream<Path> stream = Files.list(poolDir)) {
+            return stream.filter(Files::isRegularFile).filter(this::isTextFile).sorted().toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Could not list files in " + poolDir, e);
+        }
+    }
+
+    private List<MatchResult> asyncMatch(Set<String> wordsOfA, ExecutorService executor,
+                                                             List<Path> poolFiles) {
         try {
             List<CompletableFuture<MatchResult>> futures = new ArrayList<>();
             for (Path file : poolFiles) {
@@ -78,24 +116,6 @@ public class MatchingService {
         } finally {
             executor.shutdown();
         }
-    }
-
-    private MatchResult scoreFile(Path file, Set<String> wordsOfA) {
-        try {
-            Set<String> words = tokenizer.extractWords(file);
-            double score = calculator.score(wordsOfA, words);
-            return new MatchResult(file.getFileName().toString(), score);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Could not read " + file, e);
-        }
-    }
-    private int effectiveThreads() {
-        return initialThreads > 0 ? initialThreads : Runtime.getRuntime().availableProcessors();
-    }
-
-    private boolean isTextFile(Path path) {
-        String name = path.getFileName().toString().toLowerCase();
-        return fileExtensions.stream().anyMatch(ext -> name.endsWith("." + ext.toLowerCase()));
     }
 
 }

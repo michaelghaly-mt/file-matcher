@@ -7,8 +7,8 @@ import java.util.Set;
 @Component
 public class SimilarityCalculator {
 
-    private final double PERCENT = 100.0;
-    private final double ZERO_SIMILARITY = 0.0;
+    private static final double PERCENT = 100.0;
+    private static final double ZERO_SIMILARITY = 0.0;
 
     public double score(Set<String> fileAWords, Set<String> comparedFileWords) {
         if (fileAWords.isEmpty() || comparedFileWords.isEmpty()) {

@@ -74,6 +74,26 @@ class MatchingServiceTest {
     }
 
     @Test
+    void failsWhenFileAHasUnsupportedExtension() throws Exception {
+        Path a = Files.writeString(tmp.resolve("A.pdf"), "hello");
+        Path pool = Files.createDirectory(tmp.resolve("pool"));
+        Files.writeString(pool.resolve("any.txt"), "x");
+
+        assertThatThrownBy(() -> service(a, pool).matchAll())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("unsupported extension");
+    }
+
+    @Test
+    void failsWhenPoolDirectoryIsMissing() throws Exception {
+        Path a = Files.writeString(tmp.resolve("A.txt"), "hello");
+
+        assertThatThrownBy(() -> service(a, tmp.resolve("missing-pool")).matchAll())
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Pool directory not found");
+    }
+
+    @Test
     void failsClearlyWhenPoolIsEmpty() throws Exception {
         Path a = Files.writeString(tmp.resolve("A.txt"), "hello");
         Path pool = Files.createDirectory(tmp.resolve("pool"));
