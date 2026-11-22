@@ -1,8 +1,7 @@
 package com.evision.matcher.service;
 
 import com.evision.matcher.model.MatchResult;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -19,12 +18,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
+@Slf4j
 @Validated
 @Service
 public class MatchingService {
-
-    private static final Logger log = LoggerFactory.getLogger(MatchingService.class);
-
 
     @Value("${matcher.fileAPath}")
     private String mainFile;
@@ -46,20 +43,19 @@ public class MatchingService {
         Path fileA = Path.of(mainFile);
         Path poolDir = Path.of(filesDirectory);
 
-        if (!Files.isRegularFile(fileA)) {
+        if (!Files.isRegularFile(fileA) && isTxtFile(fileA)) {
             throw new IllegalArgumentException("File A not found: " + fileA.toAbsolutePath());
         }
         if (!Files.isDirectory(poolDir)) {
             throw new IllegalArgumentException("Pool directory not found: " + poolDir.toAbsolutePath());
         }
 
-        // File A is read once; workers only READ this set, so sharing it is thread-safe.
         Set<String> wordsOfA = tokenizer.extractWords(fileA);
         log.info("File A: {} distinct words", wordsOfA.size());
 
         List<Path> poolFiles;
         try (Stream<Path> stream = Files.list(poolDir)) {
-            poolFiles = stream.filter(Files::isRegularFile).sorted().toList();
+            poolFiles = stream.filter(Files::isRegularFile).filter(this::isTxtFile).sorted().toList();
         }
         if (poolFiles.isEmpty()) {
             throw new IllegalArgumentException("Pool directory has no files: " + poolDir.toAbsolutePath());
@@ -84,17 +80,20 @@ public class MatchingService {
 
     private MatchResult scoreFile(Path file, Set<String> wordsOfA) {
         try {
-            long start = System.nanoTime();
             Set<String> words = tokenizer.extractWords(file);
             double score = calculator.score(wordsOfA, words);
-            log.debug("{} processed in {} ms", file.getFileName(), (System.nanoTime() - start) / 1_000_000);
             return new MatchResult(file.getFileName().toString(), score);
         } catch (IOException e) {
             throw new UncheckedIOException("Could not read " + file, e);
         }
     }
-    public int effectiveThreads() {
+    private int effectiveThreads() {
         return initialThreads > 0 ? initialThreads : Runtime.getRuntime().availableProcessors();
+    }
+
+    private boolean isTxtFile(Path path) {
+        String name = path.getFileName().toString();
+        return name.toLowerCase().endsWith(".txt");
     }
 
 }

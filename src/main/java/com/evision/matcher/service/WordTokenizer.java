@@ -31,25 +31,32 @@ public class WordTokenizer {
         int read;
         while ((read = reader.read(buffer)) != -1) {
             for (int i = 0; i < read; i++) {
-                char c = buffer[i];
-                if (Character.isWhitespace(c)) {
-                    if (valid && current.length() > 0) {
-                        words.add(current.toString());
-                    }
-                    current.setLength(0);
-                    valid = true;
-                } else if (valid) {
-                    if (Character.isLetter(c)) {
-                        current.append(Character.toLowerCase(c));
-                    } else {
-                        valid = false;
-                    }
-                }
+                valid = processChar(buffer[i], current, words, valid);
             }
         }
+        flushWord(current, words, valid);
+        return words;
+    }
+
+    private boolean processChar(char c, StringBuilder current, Set<String> words, boolean valid) {
+        if (Character.isWhitespace(c)) {
+            flushWord(current, words, valid);
+            current.setLength(0);
+            return true;
+        }
+        if (!valid) {
+            return false;
+        }
+        if (Character.isLetter(c)) {
+            current.append(Character.toLowerCase(c));
+            return true;
+        }
+        return false;
+    }
+
+    private void flushWord(StringBuilder current, Set<String> words, boolean valid) {
         if (valid && current.length() > 0) {
             words.add(current.toString());
         }
-        return words;
     }
 }

@@ -7,21 +7,29 @@ import java.util.Set;
 @Component
 public class SimilarityCalculator {
 
-    public double score(Set<String> a, Set<String> b) {
-        if (a.isEmpty() || b.isEmpty()) {
-            return 0.0;
-        }
-        // iterate over the smaller set, look up in the bigger one (O(1) per lookup)
-        Set<String> small = a.size() <= b.size() ? a : b;
-        Set<String> large = small == a ? b : a;
+    private final double PERCENT = 100.0;
+    private final double ZERO_SIMILARITY = 0.0;
 
-        int intersection = 0;
-        for (String word : small) {
-            if (large.contains(word)) {
-                intersection++;
+    public double score(Set<String> fileAWords, Set<String> comparedFileWords) {
+        if (fileAWords.isEmpty() || comparedFileWords.isEmpty()) {
+            return ZERO_SIMILARITY;
+        }
+
+        int intersection = countSharedWords(fileAWords, comparedFileWords);
+        int union = fileAWords.size() + comparedFileWords.size() - intersection;
+        return PERCENT * intersection / union;
+    }
+
+    private int countSharedWords(Set<String> fileAWords, Set<String> comparedFileWords) {
+        Set<String> smaller = fileAWords.size() <= comparedFileWords.size() ? fileAWords : comparedFileWords;
+        Set<String> larger = smaller == fileAWords ? comparedFileWords : fileAWords;
+
+        int shared = 0;
+        for (String word : smaller) {
+            if (larger.contains(word)) {
+                shared++;
             }
         }
-        int union = a.size() + b.size() - intersection;
-        return 100.0 * intersection / union;
+        return shared;
     }
 }
